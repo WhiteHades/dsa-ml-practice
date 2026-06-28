@@ -6,9 +6,12 @@
 # `after-new-window` tmux hook that `make tmux` registers.
 #
 # Standard layout (window = any new window name):
-#   pane 0  LEFT          : leetcode TUI  (the browser, source of truth)
-#   pane 1  TOP-RIGHT     : nvim          (edits the picked .py file)
-#   pane 2  BOTTOM-RIGHT  : shell + lc-watch watcher (test/submit output)
+#   pane 1  LEFT          : leetcode TUI  (the browser, source of truth)
+#   pane 2  TOP-RIGHT     : nvim          (edits the picked .py file)
+#   pane 3  BOTTOM-RIGHT  : shell + lc-watch watcher (test/submit output)
+#
+# Note: panes are 1-indexed because the user's dotfiles set
+# `set -g pane-base-index 1`.
 #
 # All paths are relative to the user's $HOME; no personal identifiers are
 # embedded in this script.
@@ -19,27 +22,35 @@ WORKDIR="$HOME/Codes/dsa-ml-practice/leetcode"
 SCRIPTS="$HOME/Codes/dsa-ml-practice/scripts"
 SESSION="dsa-ml-practice"
 
-# tmux runs hooks with the calling shell's TMUX_PANE set. We rebuild the
-# session+window target from that. If we are not inside tmux, exit cleanly.
-if [ -z "${TMUX_PANE:-}" ]; then
+# tmux runs the after-new-window hook in a fresh shell where $TMUX_PANE is
+# NOT set to the new window's pane (it points to the calling pane instead).
+# The new window is, however, the active window at hook-fire time, so we
+# read the current window id directly from tmux. If we are somehow not
+# inside tmux, exit cleanly.
+if [ -z "${TMUX:-}" ]; then
   exit 0
 fi
 
-window_id="$(tmux display-message -p -t "$TMUX_PANE" '#{window_id}')"
+window_id="$(tmux display-message -p '#{window_id}')"
 target="${SESSION}:${window_id}"
 
-# Pane 0 is the new-window's initial pane. Re-purpose it as the TUI pane.
-tmux send-keys -t "${target}.0" 'leetcode' C-m
+# Pane 1 is the new-window's initial pane. Re-purpose it as the TUI pane.
+tmux send-keys -t "${target}.1" 'leetcode' C-m
 
-# Pane 1: top-right nvim.
-tmux split-window -h -t "${target}.0" -c "$WORKDIR"
-tmux send-keys -t "${target}.1" 'nvim' C-m
+# Pane 2: top-right nvim.
+tmux split-window -h -t "${target}.1" -c "$WORKDIR"
+tmux send-keys -t "${target}.2" 'nvim' C-m
 
-# Pane 2: bottom-right shell running the watcher (which auto-opens
-# newly picked .py files in pane 1 and writes the current id to a
-# sentinel for the C-a T / C-a S keybinds).
-tmux split-window -v -t "${target}.1" -c "$WORKDIR"
-tmux send-keys -t "${target}.2" "$SCRIPTS/lc-watch" C-m
+# Pane 3: bottom-right shell running the watcher in the background
+# (which auto-opens newly picked .py files in pane 2 and writes the
+# current id to a sentinel for the C-a T / C-a S keybinds). The watcher
+# must run in the background so the shell is free to run test/submit
+# commands in the same pane.
+tmux split-window -v -t "${target}.2" -c "$WORKDIR"
+tmux resize-pane -t "${target}.3" -y 25%
+tmux send-keys -t "${target}.3" "$SCRIPTS/lc-watch &" C-m
+tmux send-keys -t "${target}.3" "disown" C-m
+tmux send-keys -t "${target}.3" "clear" C-m
 
 # Land the user on the TUI pane so they can browse.
-tmux select-pane -t "${target}.0"
+tmux select-pane -t "${target}.1"

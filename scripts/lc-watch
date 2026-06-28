@@ -32,7 +32,7 @@ if [ -z "$my_pane" ]; then
 fi
 
 window_id="$(tmux display-message -p -t "$my_pane" '#{window_id}')"
-nvim_pane="${window_id}.1"
+nvim_pane="${window_id}.2"   # second pane in the window (0-based after we split)
 
 # Extract the leading problem id from "<id>.<slug>.<ext>" e.g. 1.two-sum.py
 extract_id() {

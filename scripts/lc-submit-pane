@@ -28,7 +28,10 @@ if [ -z "$my_pane" ]; then
   exit 0
 fi
 
+# Panes are 1-indexed because of `set -g pane-base-index 1` in the
+# user's dotfiles. The shell (test/submit output) pane is pane 3 of
+# the active window.
 window_id="$(tmux display-message -p -t "$my_pane" '#{window_id}')"
-shell_pane="${window_id}.2"
+shell_pane="${window_id}.3"
 
 tmux send-keys -t "$shell_pane" "clear; leetcode submit $id" C-m

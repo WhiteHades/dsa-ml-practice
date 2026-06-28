@@ -55,10 +55,13 @@ tmux:
 		mkdir -p "$(WORKDIR)"; \
 		tmux new-session -d -s $(SESSION) -n problems -c "$(WORKDIR)" 'leetcode'; \
 		tmux split-window -h -t $(SESSION):problems -c "$(WORKDIR)"; \
-		tmux split-window -v -t $(SESSION):problems.1 -c "$(WORKDIR)"; \
-		tmux send-keys -t $(SESSION):problems.1 'nvim' C-m; \
-		tmux send-keys -t $(SESSION):problems.2 "$(SCRIPTS)/lc-watch" C-m; \
-		tmux set-hook -g after-new-window 'run-shell "$(SCRIPTS)/lc-new-window"'; \
+		tmux split-window -v -t $(SESSION):problems.2 -c "$(WORKDIR)"; \
+		tmux resize-pane -t $(SESSION):problems.3 -y 25%; \
+		tmux send-keys -t $(SESSION):problems.2 'nvim' C-m; \
+		tmux send-keys -t $(SESSION):problems.3 "$(SCRIPTS)/lc-watch &" C-m; \
+		tmux send-keys -t $(SESSION):problems.3 "disown" C-m; \
+		tmux send-keys -t $(SESSION):problems.3 "clear" C-m; \
+		tmux set-hook -g after-new-window 'run-shell \"$(SCRIPTS)/lc-new-window\"'; \
 		tmux attach -t $(SESSION); \
 	fi
 

@@ -9,7 +9,7 @@ WORKDIR := $(HOME)/Codes/dsa-ml-practice/leetcode
 SESSION := dsa-ml-practice
 SCRIPTS := $(ROOT)/scripts
 
-.PHONY: help setup venv ml install config tmux clean repl
+.PHONY: help setup venv ml install config login whoami tmux clean repl
 
 help:
 	@printf '%s\n' 'dsa-ml-practice'
@@ -17,7 +17,9 @@ help:
 	@printf '%s\n' '  make setup     install CLI, build/link, configure workspace'
 	@printf '%s\n' '  make install    build/link the LeetCode CLI fork into PATH'
 	@printf '%s\n' '  make config     point CLI workspace at this repo'
-	@printf '%s\n' '  make tmux       open the 3-pane practice session'
+	@printf '%s\n' '  make login      log in to LeetCode with browser cookies'
+	@printf '%s\n' '  make whoami     check LeetCode login status'
+	@printf '%s\n' '  make tmux       open or resume the 3-pane practice session'
 	@printf '%s\n' '  make venv       create/sync Python env'
 	@printf '%s\n' '  make ml         install future ML basics'
 	@printf '%s\n' '  make clean      clear cache dirs'
@@ -41,6 +43,12 @@ config:
 	leetcode workspace use "$(SESSION)"
 	leetcode config --lang python3 --editor nvim --workdir "$(WORKDIR)"
 
+login:
+	leetcode login
+
+whoami:
+	leetcode whoami
+
 # Open or attach the 3-pane practice tmux session.
 # Layout per window:
 #   pane 1 LEFT          : leetcode TUI
@@ -50,7 +58,11 @@ config:
 # after-new-window hook in scripts/lc-ensure-session.
 tmux:
 	@$(SCRIPTS)/lc-ensure-session
-	@tmux attach -t $(SESSION)
+	@if [ -n "$${TMUX:-}" ]; then \
+		tmux switch-client -t $(SESSION); \
+	else \
+		tmux attach -t $(SESSION); \
+	fi
 
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__ scripts/__pycache__

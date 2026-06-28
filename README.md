@@ -1,240 +1,146 @@
 # dsa-ml-practice
 
-Terminal-native LeetCode / DSA practice now, ML practice later.
+Terminal-first LeetCode practice with a ready-made tmux workspace.
 
-The repo is built around a single 3-pane tmux session that recreates the
-LeetCode.com browser experience in your terminal:
+The goal is simple: open one command, browse problems, edit in Neovim,
+test, submit, and come back later without rebuilding the layout by hand.
 
 ```text
 +-------------+---------------------------+
 |  LEFT 35%   |  TOP-RIGHT 65%            |
-|  leetcode   |  nvim (code editor)       |
-|  TUI        |                           |
+|  leetcode   |  nvim                     |
+|  TUI        |  solution editor          |
 |             +---------------------------+
 |             |  BOTTOM-RIGHT             |
-|             |  shell                    |
-|             |  (test/submit output)     |
+|             |  shell for test/submit    |
 +-------------+---------------------------+
 ```
 
-Every new tmux window in the session automatically starts with this same
-3-pane layout. The session is started from a Makefile target, which also
-repairs a stale or partially restored session before attaching. The
-TUI-to-editor hand-off is wired by an inotifywait watcher. Test and
-submit run in the bottom-right pane through tmux keybinds.
+## Quick Start
 
-The LeetCode CLI used is the Night Slayer TypeScript fork in
-`../leetcode-cli`. It is built and linked into `PATH` by `make install`.
-
-## Setup
+First-time setup:
 
 ```bash
+cd ~/Codes/dsa-ml-practice
 make setup
-```
-
-This does three things:
-
-- builds and links the LeetCode CLI fork into your `PATH`,
-- creates and uses the `dsa-ml-practice` LeetCode workspace,
-- points that workspace at `~/Codes/dsa-ml-practice/leetcode` and sets
-  the editor to `nvim` and the language to `python3`.
-
-Then log in once:
-
-```bash
 make login
-```
-
-The CLI asks for your `LEETCODE_SESSION` and `csrftoken` cookie values
-from a logged-in browser. Credentials are stored in the system keychain
-by default.
-
-## Daily Practice
-
-```bash
 make tmux
 ```
 
-What you get:
-
-```text
-session:   dsa-ml-practice
-window 1:  name=problems (3-pane layout, see above)
-            pane 0 = leetcode TUI   (run by tmux)
-            pane 1 = nvim           (run by tmux)
-            pane 2 = shell + lc-watch watcher (inotify-based)
-```
-
-Open `make tmux` from any directory; it is the single entry point.
-
-### Workflow inside the session
-
-1. You start in the LEFT pane (the leetcode TUI).
-2. Use the TUI to browse, filter, hint, and inspect submissions.
-3. When you find a problem you want, press `p` in the TUI to pick it.
-   This writes the solution `.py` file under the workspace workdir.
-4. The inotifywait watcher detects the new primary file, records that
-   exact path under `.current/path`, and sends `:edit <path>` to the
-   nvim pane, so the editor auto-opens it.
-5. Edit the solution in the nvim pane.
-6. Press `C-a T` to run `leetcode test <current-path>` in the
-   bottom-right pane. The path is read from the sentinel that the
-   watcher writes, so numbered older attempts are not picked by
-   accident.
-7. Press `C-a S` to submit that same current path. Output streams in
-   the bottom-right pane.
-8. Press `C-a c` to open a new window. It is auto-split into the same
-   3-pane layout, so you can solve a second problem in parallel.
-9. Detach with `C-a d` and reattach with `make tmux` later. Pane state
-   is preserved by `tmux-resurrect` / `tmux-continuum` (already enabled
-   in your dotfiles).
-
-## Keybinds (added in dotfiles)
-
-- `C-a T` — run `leetcode test <current-path>` in the bottom-right pane.
-- `C-a S` — run `leetcode submit <current-path>` in the bottom-right pane.
-- `C-a c` — new window, auto-split into the same 3-pane layout.
-- `C-a d` — detach.
-- `C-a r` — reload `~/.tmux.conf` (unchanged from your dotfiles).
-
-If `C-a T` or `C-a S` does nothing, press `C-a r` to reload the tmux
-config (the keybinds are loaded into the running server, not just
-into new sessions). Re-running `make tmux` also repairs the standard
-layout if tmux-continuum restored stale panes.
-
-## How Multiple Approaches to the Same Problem Work
-
-The night-slayer TUI's `p` (pick) action has been configured so that
-re-picking an already-picked problem preserves your previous attempt
-and creates a fresh template for a new method.
-
-When you press `p` on a problem whose solution file already exists:
-
-1. The CLI finds the next available variant number (`1`, `2`, `3`, ...).
-2. The existing file is renamed to `<id>.<slug>.<N>.<ext>` (e.g.
-   `1.two-sum.1.py`).
-3. A fresh template is written to the original path
-   (`<id>.<slug>.<ext>`).
-4. The inotifywait watcher ignores the archived numbered file, detects
-   the fresh primary template, writes the problem id and path to the
-   sentinels, and sends `:edit <path>` to the nvim pane.
-5. The TUI status drawer shows the rename: e.g.
-   `Saved previous as 1.two-sum.1.py; new template at 1.two-sum.py`.
-
-So your workflow is:
-
-1. Press `p` on a problem. Edit the file in nvim. Save with `:w`.
-2. Want to try a different method? Press `p` again. Your previous
-   attempt is preserved as `1.two-sum.1.py`. A fresh primary template
-   is opened as `1.two-sum.py`. Edit, save, repeat.
-3. List all your attempts with `leetcode snapshot list 1` or by
-   looking at the directory:
-   `ls ~/Codes/dsa-ml-practice/leetcode/Easy/Array/1.two-sum*`.
-4. Compare two attempts with `diff` (system) or with
-   `leetcode snapshot diff 1 1 2` if you saved snapshots.
-
-This is git-ignored (the workdir is excluded in `.gitignore`).
-
-If you want the snapshot system instead, see below.
-
-### Option: Snapshots (for explicit versioning)
+Daily use after setup:
 
 ```bash
-leetcode snapshot save 1 brute-force
-leetcode snapshot save 1 hashmap
-leetcode snapshot list 1
-leetcode snapshot restore 1 brute-force
-leetcode snapshot diff 1 1 2
+cd ~/Codes/dsa-ml-practice
+make tmux
 ```
 
-Snapshots live outside the repo, in
-`~/.leetcode/workspaces/dsa-ml-practice/snapshots/`, so they are
-git-ignored and never leak into commits.
+`make tmux` is the recommended entry point. It creates or repairs the
+`dsa-ml-practice` tmux session, then attaches to it. If you run it from
+inside another tmux session, it switches clients instead of nesting tmux.
 
-### Important
+## Daily Workflow
 
-The unnumbered file is the current attempt. Numbered files are archived
-older attempts in creation order. The watcher only fires on file
-creation/move events. The sentinels under
-`~/Codes/dsa-ml-practice/leetcode/.current/` update on every TUI pick
-(including re-picks), so `C-a T` and `C-a S` target the freshly opened
-file path.
+1. Use the left pane to browse LeetCode problems.
+2. Press `p` on a problem to pick it.
+3. The solution file opens automatically in the top-right Neovim pane.
+4. Write your solution and save it.
+5. Press `C-a T` to run tests in the bottom-right pane.
+6. Press `C-a S` to submit the current solution.
+7. Press `C-a d` to detach when you are done.
+8. Run `make tmux` later to resume.
 
-## File Layout
+## Key Bindings
+
+These are the important tmux bindings for this workflow:
+
+| binding | action |
+| --- | --- |
+| `C-a T` | test the current solution file |
+| `C-a S` | submit the current solution file |
+| `C-a c` | create a new tmux window with the same 3-pane layout |
+| `C-a n` / `C-a p` | move to next / previous tmux window |
+| `C-a w` | choose a tmux window from a list |
+| `C-a d` | detach from tmux |
+| `C-a C-s` | manually save tmux session state |
+| `C-a r` | reload tmux config |
+
+`C-a T` and `C-a S` are guarded so they only act inside the
+`dsa-ml-practice` tmux session. They should not send LeetCode commands
+into unrelated tmux sessions.
+
+## Common Questions
+
+**I solved a problem yesterday. Today I want a new approach. What do I do?**
+
+Go to the problem in the left pane and press `p` again. The old current
+solution is archived as a numbered file like `1.two-sum.1.py`, and a
+fresh unnumbered file like `1.two-sum.py` opens in Neovim.
+
+**Which file is the active attempt?**
+
+The unnumbered file is always the active attempt. Numbered files are old
+attempts kept for reference.
+
+**Can I solve multiple problems at the same time?**
+
+Yes. Press `C-a c` to create another tmux window. Each window gets its
+own left TUI pane, Neovim pane, and test/submit shell pane.
+
+**Are those windows saved after shutdown?**
+
+tmux-continuum and tmux-resurrect are enabled in the dotfiles. For best
+results, press `C-a C-s` before shutdown, then run `make tmux` after
+booting again.
+
+**Can I attach without `make tmux`?**
+
+Yes, but it is not the recommended path. `tmux attach -t dsa-ml-practice`
+can attach to an existing session, but it skips the repair step. Use
+`make tmux` when you want the plug-and-play behavior.
+
+## Full Guide
+
+Read the detailed workflow guide here:
+
+- [docs/workflow-compendium.md](docs/workflow-compendium.md)
+
+It covers repeated attempts, next-day sessions, multiple windows, tmux
+session safety, troubleshooting, generated files, snapshots, and the
+recommended habits for this repo.
+
+## Make Targets
 
 ```text
-dsa-ml-practice/
-├── .env.example           # env-only auth template (optional)
-├── .gitignore             # ignores .venv, .env, leetcode/.current, caches
-├── .python-version
-├── Makefile               # the only command surface
-├── README.md
-├── leetcode/              # workdir; CLI writes solutions and .notes here
-├── ml/                    # placeholder for future ML practice
-├── pyproject.toml         # Python deps (ipython + optional ML)
-├── scripts/
-│   ├── lc-ensure-session  # create/repair the tmux session before attach
-│   ├── lc-new-window      # called by after-new-window tmux hook
-│   ├── lc-test-pane       # `C-a T`: leetcode test in bottom-right pane
-│   ├── lc-submit-pane     # `C-a S`: leetcode submit in bottom-right pane
-│   ├── lc-watch           # inotifywait watcher (file -> nvim + sentinel)
-│   └── lc-current-id      # print sentinel id (for shell pipelines)
-└── uv.lock
-```
-
-## Where Artifacts Live Outside The Repo
-
-- Generated solutions and notes: `~/Codes/dsa-ml-practice/leetcode/`
-  (set as the active LeetCode workspace workdir).
-- Workspace config and snapshots:
-  `~/.leetcode/workspaces/dsa-ml-practice/`
-- LeetCode credentials: OS keychain (set by `make login`).
-
-## Make Targets (the only ones)
-
-```text
-make help      show this list
-make setup     install CLI + configure workspace
-make install   build/link the LeetCode CLI fork
-make config    point CLI workspace at this repo
-make tmux      open/attach the 3-pane session
-make venv      create/sync Python env
-make ml        install optional ML deps (numpy/pandas/matplotlib/sklearn)
-make clean     clear cache dirs
+make help      show commands
+make setup     install the LeetCode CLI fork and configure the workspace
+make install   build/link the LeetCode CLI fork into PATH
+make config    point the CLI workspace at this repo
+make login     log in to LeetCode with browser cookies
+make whoami    check LeetCode login status
+make tmux      open or resume the 3-pane practice session
+make venv      create/sync the Python environment
+make ml        install optional ML dependencies
+make clean     clear local cache directories
 make repl      launch ipython
 ```
 
-## Manual Smoke Test
+## What Lives Where
 
-```bash
-make setup        # only first time
-make login        # only first time (or when cookies expire)
-make tmux
+- Repo code and workflow scripts live here:
+  `~/Codes/dsa-ml-practice`
+- Generated LeetCode solutions live under:
+  `~/Codes/dsa-ml-practice/leetcode`
+- Generated solutions are git-ignored.
+- tmux and Neovim configuration live in:
+  `~/dotfiles`
 
-# inside the session:
-#   - left pane: press j/k to move, Enter to open a problem
-#   - left pane: press p to pick (writes <id>.<slug>.py)
-#   - right top: nvim auto-opens that file
-#   - edit, save
-#   - press C-a T to test in the bottom-right pane
-#   - press C-a S to submit
-#   - press C-a c to open a new problem window (auto 3-pane)
-#   - press C-a d to detach
-make tmux         # reattach later; state is preserved by tmux-resurrect
-```
+## Requirements
 
-## Why This Setup
+- tmux
+- Neovim
+- Node/npm for the LeetCode CLI fork
+- `inotifywait`
+- `uv` for Python environment management
 
-- The LeetCode CLI gives you the closest terminal-native LeetCode
-  experience: list, pick, edit, test, submit, hints, submissions,
-  snapshots, stats, notes, bookmarks, diffs, workspaces, daily, random.
-- tmux gives you the layout. Three panes side by side mirror the
-  LeetCode.com browser (question left, code top-right, console
-  bottom-right).
-- The inotifywait watcher is the smallest possible glue between the
-  TUI's `p` action and the nvim pane. No forking the CLI required.
-- State preservation comes from `tmux-resurrect` and `tmux-continuum`,
-  which are already enabled in your dotfiles.
-- Multiple approaches to the same problem are supported via the CLI's
-  built-in snapshot system; the watcher does not interfere with copies
-  or renames.
+The LeetCode CLI used by this workflow is expected at
+`~/Codes/leetcode-cli`.

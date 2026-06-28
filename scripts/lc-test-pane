@@ -14,6 +14,7 @@ set -euo pipefail
 WORKDIR="$HOME/Codes/dsa-ml-practice/leetcode"
 ID_SENTINEL="$WORKDIR/.current/id"
 PATH_SENTINEL="$WORKDIR/.current/path"
+SESSION="dsa-ml-practice"
 
 target="${1:-}"
 if [ -z "$target" ] && [ -f "$PATH_SENTINEL" ]; then
@@ -37,6 +38,14 @@ esac
 origin_pane="${LC_TMUX_PANE:-${TMUX_PANE:-}}"
 if [ -z "$origin_pane" ]; then
   origin_pane="$(tmux display-message -p '#{pane_id}')"
+fi
+
+session_name="$(tmux display-message -p -t "$origin_pane" '#{session_name}' 2>/dev/null || true)"
+if [ "$session_name" != "$SESSION" ]; then
+  if [ -n "$session_name" ]; then
+    tmux display-message -t "$origin_pane" "leetcode test binding is only active in $SESSION"
+  fi
+  exit 0
 fi
 
 # Panes are 1-indexed because of `set -g pane-base-index 1` in the

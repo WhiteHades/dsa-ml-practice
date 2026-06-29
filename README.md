@@ -94,7 +94,9 @@ the generic binding shape and the maintainer-specific tmux config path.
 
 ## OpenCode Tutor
 
-`make tmux` ensures a second tmux window named `opencode`.
+`make tmux` ensures a second tmux window named `opencode`. That window
+runs `scripts/lc-opencode-pane`, a repo-scoped supervisor that opens
+OpenCode and restarts it if it exits.
 
 The OpenCode tutor uses:
 
@@ -104,14 +106,19 @@ The OpenCode tutor uses:
 - `leetcode/.current/problem.md` and `leetcode/.current/problem.json`
   for the current problem
 
+The OpenCode session title follows `leetcode/.current/topic-slug`, so a
+problem tagged `linked-list` opens or reuses the `linked-list` chat. If
+the topic changes while the tutor is open, the supervisor closes the old
+OpenCode process and reopens the matching topic session.
+
 The default model is:
 
 ```text
 opencode-go/deepseek-v4-flash
 ```
 
-If that model is unavailable during first session setup, the launcher
-falls back to:
+If that model is unavailable during first session setup, or the primary
+OpenCode process exits with an error, the launcher falls back to:
 
 ```text
 opencode/deepseek-v4-flash-free
@@ -122,6 +129,11 @@ To use another model for one run:
 ```bash
 LC_OPENCODE_MODEL=<provider/model> make tmux
 ```
+
+The launcher sets `TMPDIR` only for its own OpenCode child process, using
+repo-local `.cache/tmp`. It does not edit global OpenCode config, shell
+aliases, or dotfiles, so normal OpenCode use outside this repo is left
+alone.
 
 ## Maintainer Defaults
 

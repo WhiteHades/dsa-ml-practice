@@ -26,6 +26,29 @@ pane_command() {
   tmux display-message -p -t "$1" '#{pane_current_command}' 2>/dev/null || true
 }
 
+process_tree_has_opencode() {
+  local pid="$1" child cmd args
+
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    cmd="$(ps -o comm= -p "$child" 2>/dev/null || true)"
+    args="$(ps -o args= -p "$child" 2>/dev/null || true)"
+    case "$cmd $args" in
+      *lc-opencode-pane*|*opencode*) return 0 ;;
+    esac
+    process_tree_has_opencode "$child" && return 0
+  done
+
+  return 1
+}
+
+pane_has_opencode() {
+  local pane="$1" pane_pid
+
+  pane_pid="$(tmux display-message -p -t "$pane" '#{pane_pid}' 2>/dev/null || true)"
+  [ -n "$pane_pid" ] || return 1
+  process_tree_has_opencode "$pane_pid"
+}
+
 cancel_pane_mode() {
   local pane="$1"
 
@@ -108,12 +131,19 @@ start_opencode() {
   local pane="$1" cmd
 
   cancel_pane_mode "$pane"
+  if pane_has_opencode "$pane"; then
+    return 0
+  fi
+
   cmd="$(pane_command "$pane")"
-  if [ "$cmd" = "opencode" ]; then
+  if [ "$cmd" = "opencode" ] || [ "$cmd" = "lc-opencode-pane" ]; then
     return 0
   fi
 
   is_shell "$cmd" || return 1
+  tmux send-keys -t "$pane" C-c
+  tmux send-keys -t "$pane" 'reset' C-m
+  tmux send-keys -t "$pane" 'clear' C-m
   tmux send-keys -t "$pane" "cd \"$ROOT\" && \"$SCRIPTS/lc-opencode-pane\"" C-m
 }
 

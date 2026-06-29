@@ -365,12 +365,18 @@ dynamic-programming
 If a session with the same title and repo directory already exists,
 OpenCode reuses it. If not, the launcher creates one.
 
-The title is chosen when OpenCode starts. If you browse to another
-problem while OpenCode is already open, the context files still update,
-but the chat title does not auto-rename. This is intentional: automatic
-restarts would interrupt active conversations. To start or reuse the
-topic chat for the latest problem, exit OpenCode in the `opencode`
-window and run:
+The launcher keeps watching `<workdir>/.current/topic-slug`. If you
+browse to a problem whose first topic slug is different, it closes the
+current OpenCode TUI and reopens the matching topic chat. If the new
+problem has the same first topic slug, the same OpenCode chat stays open.
+
+The chat session is per topic, not per problem. For example, two
+different linked-list problems use the same `linked-list` OpenCode
+session.
+
+You normally do not run the launcher by hand. `make tmux` creates or
+repairs the window. If you are already inside the `opencode` window and
+need to restart the supervisor manually, run:
 
 ```bash
 scripts/lc-opencode-pane
@@ -384,7 +390,7 @@ Default model:
 opencode-go/deepseek-v4-flash
 ```
 
-Fallback model for first-session setup:
+Fallback model for first-session setup and primary-process errors:
 
 ```text
 opencode/deepseek-v4-flash-free
@@ -396,13 +402,18 @@ The defaults live in:
 .opencode/config.env
 ```
 
-The launcher scans OpenCode's full session list when looking for an
-existing chat with the same topic title and repo directory. It does not
-delete, cap, or limit your sessions.
+The launcher asks OpenCode's database for the exact matching topic title
+and repo directory. It does not delete, cap, or limit your sessions.
 
 Temporary OpenCode seed logs go to a repo-local cache directory at
 `<repo-dir>/.cache/opencode`, and are removed after successful startup.
-The `.cache/` directory is ignored by git.
+OpenCode temp files for this launcher use `<repo-dir>/.cache/tmp`. The
+`.cache/` directory is ignored by git.
+
+This customization is scoped to this repo launcher. It exports `TMPDIR`
+only for the OpenCode child process it starts. It does not edit global
+OpenCode config, shell aliases, zsh config, tmux config, or dotfiles.
+Normal OpenCode use outside this workflow is left alone.
 
 For a one-off model swap:
 
@@ -817,16 +828,19 @@ solution path.
 
 ### I want the OpenCode chat title to match the latest topic
 
-Exit OpenCode in the `opencode` window and restart:
+You should not need to do anything manually. The `opencode` window
+supervisor watches:
 
-```bash
-cd <repo-dir>
-scripts/lc-opencode-pane
+```text
+<workdir>/.current/topic-slug
 ```
 
-The launcher reads the latest `<workdir>/.current/topic-slug`, reuses an
-existing session with that title when available, and creates one only
-when needed.
+When that file changes to a new topic slug, the supervisor closes the
+current OpenCode TUI and reopens the existing matching session, creating
+one only when needed.
+
+If the `opencode` window is missing or idle, run `make tmux` from
+`<repo-dir>` to repair it.
 
 ### I want to inspect old attempts
 

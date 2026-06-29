@@ -20,6 +20,10 @@ LOG_DIR="${LC_OPENCODE_LOG_DIR:-$CACHE_DIR/opencode}"
 mkdir -p "$CURRENT_DIR" "$TMP_ROOT" "$LOG_DIR"
 export TMPDIR="$TMP_ROOT"
 
+if [ -z "${OPENCODE_CONFIG_CONTENT:-}" ]; then
+  export OPENCODE_CONFIG_CONTENT='{"mcp":{"alphaxiv":{"enabled":false}}}'
+fi
+
 opencode_pid=""
 watcher_pid=""
 session_id=""
@@ -44,6 +48,19 @@ load_config_defaults() {
         ;;
     esac
   done < "$CONFIG_FILE"
+}
+
+reset_terminal_modes() {
+  local junk
+
+  # OpenCode/OpenTUI enables mouse tracking. If it exits under tmux without a
+  # clean teardown, mouse events leak into the shell as [[<...M text.
+  printf '\033[?1000l\033[?1002l\033[?1003l\033[?1006l\033[?1015l\033[?1004l\033[?2004l\033[?2027l\033[?2031l\033[?25h\033[0m'
+  stty sane 2>/dev/null || true
+  [ -t 0 ] || return 0
+  while IFS= read -r -s -t 0.05 -n 256 junk 2>/dev/null; do
+    :
+  done
 }
 
 read_first_line() {
@@ -197,6 +214,7 @@ stop_child() {
 cleanup() {
   stop_child "$watcher_pid"
   stop_child "$opencode_pid"
+  reset_terminal_modes
 }
 
 shutdown() {
@@ -225,6 +243,7 @@ while :; do
   SESSION_TITLE="$(current_session_title)"
   ensure_session "$SESSION_TITLE"
 
+  reset_terminal_modes
   printf 'lc-opencode-pane: opening topic session "%s"\n' "$SESSION_TITLE" >&2
   if [ -n "$session_id" ]; then
     opencode "$ROOT" --model "$model" --session "$session_id" &
@@ -247,20 +266,18 @@ while :; do
   if [ "$finished_pid" = "$watcher_pid" ]; then
     printf 'lc-opencode-pane: topic changed; reopening OpenCode\n' >&2
     stop_child "$opencode_pid"
+    reset_terminal_modes
     opencode_pid=""
     watcher_pid=""
     continue
   fi
 
   stop_child "$watcher_pid"
+  reset_terminal_modes
   opencode_pid=""
   watcher_pid=""
 
-  if [ "$status" -ne 0 ] && [ "$model" != "$LC_OPENCODE_FALLBACK_MODEL" ]; then
-    model="$LC_OPENCODE_FALLBACK_MODEL"
-    printf 'lc-opencode-pane: switching to fallback model %s\n' "$model" >&2
-  fi
-
-  printf 'lc-opencode-pane: OpenCode exited with status %s; restarting\n' "$status" >&2
-  sleep 2
+  printf '\r\033[2K' >&2
+  printf 'lc-opencode-pane: OpenCode exited with status %s; leaving pane at shell\n' "$status" >&2
+  exit "$status"
 done

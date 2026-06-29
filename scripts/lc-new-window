@@ -22,6 +22,21 @@ WORKDIR="$HOME/Codes/dsa-ml-practice/leetcode"
 SCRIPTS="$HOME/Codes/dsa-ml-practice/scripts"
 SESSION="dsa-ml-practice"
 
+leetcode_ready() {
+  command -v leetcode >/dev/null 2>&1 && leetcode whoami >/dev/null 2>&1
+}
+
+start_leetcode() {
+  local pane="$1"
+
+  if leetcode_ready; then
+    tmux send-keys -t "$pane" 'leetcode' C-m
+    return 0
+  fi
+
+  tmux send-keys -t "$pane" "cd \"$HOME/Codes/dsa-ml-practice\" && \"$SCRIPTS/lc-healthcheck\"; leetcode login" C-m
+}
+
 # tmux runs the after-new-window hook in a fresh shell where $TMUX_PANE is
 # NOT set to the new window's pane (it points to the calling pane instead).
 # The new window is, however, the active window at hook-fire time, so we
@@ -35,7 +50,7 @@ window_id="$(tmux display-message -p '#{window_id}')"
 target="${SESSION}:${window_id}"
 
 # Pane 1 is the new-window's initial pane. Re-purpose it as the TUI pane.
-tmux send-keys -t "${target}.1" 'leetcode' C-m
+start_leetcode "${target}.1"
 
 # Pane 2: top-right nvim.
 tmux split-window -h -p 65 -t "${target}.1" -c "$WORKDIR"

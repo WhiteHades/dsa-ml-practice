@@ -15,6 +15,21 @@ SESSION="dsa-ml-practice"
 
 mkdir -p "$WORKDIR"
 
+leetcode_ready() {
+  command -v leetcode >/dev/null 2>&1 && leetcode whoami >/dev/null 2>&1
+}
+
+start_leetcode() {
+  local pane="$1"
+
+  if leetcode_ready; then
+    tmux send-keys -t "$pane" 'leetcode' C-m
+    return 0
+  fi
+
+  tmux send-keys -t "$pane" "cd \"$ROOT\" && \"$SCRIPTS/lc-healthcheck\"; leetcode login" C-m
+}
+
 is_shell() {
   case "$1" in
     bash|fish|sh|zsh) return 0 ;;
@@ -100,7 +115,7 @@ apply_layout() {
 setup_window() {
   local target="$1"
 
-  tmux send-keys -t "${target}.1" 'leetcode' C-m
+  start_leetcode "${target}.1"
   tmux split-window -h -p 65 -t "${target}.1" -c "$WORKDIR"
   tmux send-keys -t "${target}.2" 'nvim' C-m
   tmux split-window -v -t "${target}.2" -c "$WORKDIR"
@@ -190,7 +205,7 @@ repair_window() {
 
   if [ "$cmd1" != "node" ]; then
     is_shell "$cmd1" || return 1
-    tmux send-keys -t "${window}.1" 'leetcode' C-m
+    start_leetcode "${window}.1"
   fi
 
   if [ "$cmd2" != "nvim" ]; then

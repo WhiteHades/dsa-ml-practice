@@ -23,6 +23,10 @@ The LeetCode CLI writes current context here:
 ```text
 leetcode/.current/problem.md      human-readable current problem
 leetcode/.current/problem.json    structured current problem
+leetcode/.current/problem-cache-md    deterministic per-problem Markdown path
+leetcode/.current/problem-cache-json  deterministic per-problem JSON path
+leetcode/.current/problems/<difficulty>/<topic>/<id.slug>.md
+leetcode/.current/problems/<difficulty>/<topic>/<id.slug>.json
 leetcode/.current/problem-id      current viewed problem id
 leetcode/.current/problem-slug    current viewed problem slug
 leetcode/.current/topic-name      first topic tag name
@@ -33,6 +37,10 @@ leetcode/.current/path            active picked solution path
 
 Viewing a problem updates the `problem-*` and `topic-*` files. Picking a solution file updates
 `id` and `path`.
+
+`problem.md` and `problem.json` are live pointers and are overwritten for the latest viewed problem.
+The files under `leetcode/.current/problems/` are deterministic per-problem cache files. Reopening the
+same problem updates the same cache file; it does not create duplicates.
 
 ## Global Working Rules
 

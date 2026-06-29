@@ -293,18 +293,43 @@ scripts/lc-opencode-pane
 The important files are:
 
 ```text
-problem.md      current problem in terminal-friendly Markdown
-problem.json    current problem as structured data
-problem-id      current viewed problem id
-problem-slug    current viewed problem slug
-topic-name      first topic tag name
-topic-slug      first topic tag slug
-id              active picked solution id
-path            active picked solution path
+problem.md              live current problem in terminal-friendly Markdown
+problem.json            live current problem as structured data
+problem-cache-md        path to the deterministic per-problem Markdown cache
+problem-cache-json      path to the deterministic per-problem JSON cache
+problems/<difficulty>/<topic>/<id.slug>.md
+problems/<difficulty>/<topic>/<id.slug>.json
+problem-id              current viewed problem id
+problem-slug            current viewed problem slug
+topic-name              first topic tag name
+topic-slug              first topic tag slug
+id                      active picked solution id
+path                    active picked solution path
 ```
 
-Viewing a problem in the LeetCode CLI updates the problem and topic
-files. Picking a solution updates `id` and `path`.
+Viewing a problem in the LeetCode CLI overwrites `problem.md` and
+`problem.json` with the latest viewed problem. It also writes a
+deterministic per-problem cache file under `problems/<difficulty>/<topic>/`.
+
+Example:
+
+```text
+<workdir>/.current/problem.md
+<workdir>/.current/problem.json
+<workdir>/.current/problems/Easy/array/1.two-sum.md
+<workdir>/.current/problems/Easy/array/1.two-sum.json
+```
+
+Reopening Two Sum updates the same `1.two-sum.*` cache files. It does
+not create duplicates.
+
+Difficulty comes from LeetCode's difficulty field: `Easy`, `Medium`, or
+`Hard`. Topic comes from the first LeetCode topic tag slug. All topic
+tags are still written inside `problem.md` and `problem.json`.
+
+Picking a solution updates `id` and `path`. Merely viewing a problem
+does not change the active test/submit path unless that path already
+matches the viewed problem.
 
 ### Asking For Help
 

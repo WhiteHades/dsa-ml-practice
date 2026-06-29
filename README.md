@@ -199,6 +199,12 @@ The LeetCode CLI writes the current problem to `leetcode/.current/`.
 OpenCode is instructed to reread those files when you ask for help, so
 the context follows the latest problem without scraping tmux panes.
 
+`leetcode/.current/problem.md` is overwritten for the latest viewed
+problem. The CLI also keeps deterministic per-problem copies under
+`leetcode/.current/problems/<difficulty>/<topic>/<id.slug>.md`, so
+reopening the same problem updates the same file instead of creating
+duplicates.
+
 **Can I attach without `make tmux`?**
 
 Yes, but it is not the recommended path. `tmux attach -t dsa-ml-practice`

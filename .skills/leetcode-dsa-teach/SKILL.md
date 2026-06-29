@@ -18,6 +18,10 @@ Before answering a teaching/help request:
 4. Read the solution file named by `leetcode/.current/path` only when code context is needed.
 5. If the solution path does not match the current problem id or slug, say it looks stale before using it.
 
+`leetcode/.current/problem.md` is the live current-problem pointer and can be overwritten when the user
+opens another problem. Deterministic per-problem copies live under
+`leetcode/.current/problems/<difficulty>/<topic>/<id.slug>.md`.
+
 The files in `leetcode/.current/` are dynamic. Reread them for each new request instead of relying on
 old chat memory.
 

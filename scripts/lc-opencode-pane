@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# lc-opencode-pane
+# ------------------------------------------------------------------------------
+# Starts the repo-scoped OpenCode tutor window. The OpenCode session title is
+# the current problem's first topic slug, read from leetcode/.current/topic-slug.
+# Existing sessions with the same title and repo directory are reused.
+# ------------------------------------------------------------------------------
+set -euo pipefail
+
+ROOT="${LC_REPO_ROOT:-$HOME/Codes/dsa-ml-practice}"
+WORKDIR="${LC_WORKDIR:-$ROOT/leetcode}"
+CURRENT_DIR="$WORKDIR/.current"
+CONFIG_FILE="$ROOT/.opencode/config.env"
+PROMPT_FILE="$ROOT/.opencode/dsa-prompt.md"
+LOG_DIR="${LC_OPENCODE_LOG_DIR:-$ROOT/.cache/opencode}"
+
+load_config_defaults() {
+  local line key value
+
+  [ -f "$CONFIG_FILE" ] || return 0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      ''|\#*) continue ;;
+    esac
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      LC_OPENCODE_MODEL|LC_OPENCODE_FALLBACK_MODEL)
+        if [ -z "${!key+x}" ]; then
+          export "$key=$value"
+        fi
+        ;;
+    esac
+  done < "$CONFIG_FILE"
+}
+
+read_first_line() {
+  local file="$1"
+
+  [ -f "$file" ] || return 1
+  sed -n '1p' "$file" | tr -d '\r'
+}
+
+sanitize_title() {
+  tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//'
+}
+
+model_available() {
+  local model="$1"
+
+  opencode models 2>/dev/null | awk '{print $1}' | grep -Fxq "$model"
+}
+
+choose_model() {
+  local preferred="$1"
+  local fallback="$2"
+
+  if model_available "$preferred"; then
+    printf '%s\n' "$preferred"
+    return 0
+  fi
+
+  if [ "$fallback" != "$preferred" ] && model_available "$fallback"; then
+    printf '%s\n' "$fallback"
+    return 0
+  fi
+
+  printf '%s\n' "$preferred"
+}
+
+find_session() {
+  local title="$1"
+  local directory="$2"
+
+  opencode session list --format json 2>/dev/null | \
+    node -e '
+const fs = require("fs");
+const [title, directory] = process.argv.slice(1);
+let sessions = [];
+try {
+  sessions = JSON.parse(fs.readFileSync(0, "utf8"));
+} catch {
+  process.exit(0);
+}
+const match = sessions.find((session) => {
+  return session.title === title && session.directory === directory;
+});
+if (match) process.stdout.write(match.id);
+' "$title" "$directory"
+}
+
+seed_prompt() {
+  if [ -f "$PROMPT_FILE" ]; then
+    cat "$PROMPT_FILE"
+    printf '\n\n'
+  fi
+
+  cat <<EOF
+Initialize this OpenCode topic session named "$SESSION_TITLE".
+Read AGENTS.md and the repo-local DSA teach skill before helping.
+Do not solve anything yet. Reply with READY.
+EOF
+}
+
+seed_session() {
+  local model="$1"
+  local log_file
+
+  mkdir -p "$LOG_DIR" 2>/dev/null || LOG_DIR="$ROOT"
+  log_file="$LOG_DIR/lc-opencode-seed.$$.log"
+  if opencode run --dir "$ROOT" --title "$SESSION_TITLE" --model "$model" --format json "$(seed_prompt)" >"$log_file" 2>&1; then
+    rm -f "$log_file"
+    return 0
+  fi
+
+  printf 'lc-opencode-pane: failed to seed session with model %s\n' "$model" >&2
+  sed -n '1,80p' "$log_file" >&2 || true
+  rm -f "$log_file"
+  return 1
+}
+
+if ! command -v opencode >/dev/null 2>&1; then
+  echo "lc-opencode-pane: opencode is not installed or not on PATH" >&2
+  exec "${SHELL:-/bin/sh}" -l
+fi
+
+load_config_defaults
+
+: "${LC_OPENCODE_MODEL:=opencode-go/deepseek-v4-flash}"
+: "${LC_OPENCODE_FALLBACK_MODEL:=opencode/deepseek-v4-flash-free}"
+
+raw_title="$(read_first_line "$CURRENT_DIR/topic-slug" || true)"
+if [ -z "$raw_title" ]; then
+  raw_title="$(read_first_line "$CURRENT_DIR/topic-name" || true)"
+fi
+
+SESSION_TITLE="$(printf '%s' "$raw_title" | sanitize_title)"
+if [ -z "$SESSION_TITLE" ]; then
+  SESSION_TITLE="dsa-practice"
+fi
+
+model="$(choose_model "$LC_OPENCODE_MODEL" "$LC_OPENCODE_FALLBACK_MODEL")"
+session_id="$(find_session "$SESSION_TITLE" "$ROOT")"
+
+if [ -z "$session_id" ]; then
+  if ! seed_session "$model"; then
+    if [ "$LC_OPENCODE_FALLBACK_MODEL" != "$model" ]; then
+      model="$LC_OPENCODE_FALLBACK_MODEL"
+      seed_session "$model" || true
+    fi
+  fi
+  session_id="$(find_session "$SESSION_TITLE" "$ROOT")"
+fi
+
+cd "$ROOT"
+
+if [ -n "$session_id" ]; then
+  exec opencode "$ROOT" --model "$model" --session "$session_id"
+fi
+
+if [ -f "$PROMPT_FILE" ]; then
+  exec opencode "$ROOT" --model "$model" --prompt "$(cat "$PROMPT_FILE")"
+fi
+
+exec opencode "$ROOT" --model "$model"

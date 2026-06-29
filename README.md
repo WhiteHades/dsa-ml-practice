@@ -1,9 +1,11 @@
 # dsa-ml-practice
 
-Terminal-first LeetCode practice with a ready-made tmux workspace.
+Terminal-first LeetCode practice with a ready-made tmux workspace and
+an optional OpenCode tutor window.
 
 The goal is simple: open one command, browse problems, edit in Neovim,
-test, submit, and come back later without rebuilding the layout by hand.
+test, submit, ask for help, and come back later without rebuilding the
+layout by hand.
 
 ```text
 +-------------+---------------------------+
@@ -15,6 +17,10 @@ test, submit, and come back later without rebuilding the layout by hand.
 |             | test/submit shell         |
 +-------------+---------------------------+
 ```
+
+The tmux workspace also opens a second window named `opencode` in the
+repo root. That window starts OpenCode with repo-specific instructions
+and reads the current LeetCode problem context from `leetcode/.current/`.
 
 ## Quick Start
 
@@ -47,6 +53,10 @@ make tmux
 value is `../leetcode-cli`, so a sibling checkout works without passing
 the variable.
 
+OpenCode is not installed by `make setup`. Install it separately from
+the OpenCode project/package for your system if you want the tutor
+window. Without OpenCode, the normal LeetCode panes still work.
+
 Note: the committed helper scripts and tmux bindings are currently wired
 for the maintainer defaults listed below. Public placeholders show what
 to replace if you adapt this repo for another machine.
@@ -59,8 +69,10 @@ to replace if you adapt this repo for another machine.
 4. Write your solution and save it.
 5. Press `<tmux-prefix> T` to run tests in the bottom-right pane.
 6. Press `<tmux-prefix> S` to submit the current solution.
-7. Press `<tmux-prefix> d` to detach when you are done.
-8. Run `make tmux` later to resume.
+7. Switch to the `opencode` window when you want terminal help for the
+   current problem.
+8. Press `<tmux-prefix> d` to detach when you are done.
+9. Run `make tmux` later to resume.
 
 ## Key Bindings
 
@@ -80,6 +92,37 @@ The test/submit bindings must be added to your tmux config. This repo
 includes helper scripts for them under `scripts/`. See the full guide for
 the generic binding shape and the maintainer-specific tmux config path.
 
+## OpenCode Tutor
+
+`make tmux` ensures a second tmux window named `opencode`.
+
+The OpenCode tutor uses:
+
+- `AGENTS.md` for repo-specific agent behavior
+- `.skills/leetcode-dsa-teach/SKILL.md` for terminal-only DSA teaching
+- `.opencode/dsa-prompt.md` for startup context
+- `leetcode/.current/problem.md` and `leetcode/.current/problem.json`
+  for the current problem
+
+The default model is:
+
+```text
+opencode-go/deepseek-v4-flash
+```
+
+If that model is unavailable during first session setup, the launcher
+falls back to:
+
+```text
+opencode/deepseek-v4-flash-free
+```
+
+To use another model for one run:
+
+```bash
+LC_OPENCODE_MODEL=<provider/model> make tmux
+```
+
 ## Maintainer Defaults
 
 This repo is currently tuned for the maintainer's local setup:
@@ -92,6 +135,8 @@ This repo is currently tuned for the maintainer's local setup:
 | tmux session | `dsa-ml-practice` |
 | tmux prefix | `C-a` |
 | dotfiles source | `~/dotfiles` |
+| OpenCode default model | `opencode-go/deepseek-v4-flash` |
+| OpenCode fallback model | `opencode/deepseek-v4-flash-free` |
 
 So in the maintainer setup, the daily commands are:
 
@@ -148,6 +193,12 @@ attempts kept for reference.
 Yes. Press `<tmux-prefix> c` to create another tmux window. Each window
 gets its own left TUI pane, Neovim pane, and test/submit shell pane.
 
+**How does OpenCode know which problem I mean?**
+
+The LeetCode CLI writes the current problem to `leetcode/.current/`.
+OpenCode is instructed to reread those files when you ask for help, so
+the context follows the latest problem without scraping tmux panes.
+
 **Can I attach without `make tmux`?**
 
 Yes, but it is not the recommended path. `tmux attach -t dsa-ml-practice`
@@ -163,7 +214,7 @@ make install   build/link the LeetCode CLI fork into PATH
 make config    point the CLI workspace at this repo
 make login     log in to LeetCode with browser cookies
 make whoami    check LeetCode login status
-make tmux      open or resume the 3-pane practice session
+make tmux      open or resume the tmux practice workspace
 make venv      create/sync the Python environment
 make ml        install optional ML dependencies
 make clean     clear local cache directories
@@ -177,6 +228,7 @@ make repl      launch ipython
 - Node/npm for the LeetCode CLI fork
 - `inotifywait`
 - `uv` for Python environment management
+- optional: OpenCode for the tutor window
 - optional: TPM, `tmux-resurrect`, and `tmux-continuum` for restore
 
 Generated LeetCode solutions are git-ignored and live under the

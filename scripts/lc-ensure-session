@@ -8,8 +8,9 @@
 # ------------------------------------------------------------------------------
 set -euo pipefail
 
-WORKDIR="$HOME/Codes/dsa-ml-practice/leetcode"
-SCRIPTS="$HOME/Codes/dsa-ml-practice/scripts"
+ROOT="$HOME/Codes/dsa-ml-practice"
+WORKDIR="$ROOT/leetcode"
+SCRIPTS="$ROOT/scripts"
 SESSION="dsa-ml-practice"
 
 mkdir -p "$WORKDIR"
@@ -39,6 +40,12 @@ set_session_hook() {
   fi
 
   tmux set-hook -t "$SESSION" after-new-window "run-shell \"$SCRIPTS/lc-new-window\""
+}
+
+with_hook_disabled() {
+  tmux set-hook -t "$SESSION" -u after-new-window 2>/dev/null || true
+  "$@"
+  set_session_hook
 }
 
 start_watcher() {
@@ -82,7 +89,9 @@ setup_window() {
 create_session() {
   tmux new-session -d -s "$SESSION" -n problems -c "$WORKDIR"
   setup_window "$SESSION:problems"
+  ensure_opencode_window
   set_session_hook
+  tmux select-window -t "$SESSION:1"
 }
 
 create_window() {
@@ -93,6 +102,49 @@ create_window() {
   setup_window "$SESSION:$window_id"
   set_session_hook
   tmux select-window -t "$SESSION:$window_id"
+}
+
+start_opencode() {
+  local pane="$1" cmd
+
+  cancel_pane_mode "$pane"
+  cmd="$(pane_command "$pane")"
+  if [ "$cmd" = "opencode" ]; then
+    return 0
+  fi
+
+  is_shell "$cmd" || return 1
+  tmux send-keys -t "$pane" "cd \"$ROOT\" && \"$SCRIPTS/lc-opencode-pane\"" C-m
+}
+
+create_opencode_window() {
+  local window_id
+
+  window_id="$(tmux new-window -d -P -F '#{window_id}' -t "$SESSION:2" -n opencode -c "$ROOT" 2>/dev/null || true)"
+  if [ -z "$window_id" ]; then
+    window_id="$(tmux new-window -d -P -F '#{window_id}' -t "$SESSION:" -n opencode -c "$ROOT")"
+  fi
+
+  start_opencode "$SESSION:$window_id.1" || true
+}
+
+ensure_opencode_window() {
+  local window pane_count pane
+
+  window="$(tmux list-windows -t "$SESSION" -F '#{window_id} #{window_name}' | awk '$2 == "opencode" { print $1; exit }')"
+  if [ -z "$window" ]; then
+    with_hook_disabled create_opencode_window
+    return 0
+  fi
+
+  pane_count="$(tmux list-panes -t "$SESSION:$window" 2>/dev/null | wc -l)"
+  if [ "$pane_count" -gt 1 ]; then
+    for pane in $(tmux list-panes -t "$SESSION:$window" -F '#{pane_id}' | tail -n +2); do
+      tmux kill-pane -t "$pane" 2>/dev/null || true
+    done
+  fi
+
+  start_opencode "$SESSION:$window.1" || true
 }
 
 repair_window() {
@@ -132,3 +184,7 @@ set_session_hook
 if ! repair_window "$SESSION:1"; then
   create_window
 fi
+
+problem_window="$(tmux display-message -p -t "$SESSION" '#{window_id}')"
+ensure_opencode_window
+tmux select-window -t "$SESSION:$problem_window"

@@ -15,6 +15,7 @@ Use these names when adapting the workflow:
 | `<workdir>` | where generated LeetCode solution files are written |
 | `<tmux-prefix>` | your tmux prefix, usually `C-b` unless changed |
 | `<session-name>` | the tmux session name, default `dsa-ml-practice` |
+| `<provider/model>` | an OpenCode model id, for example `opencode-go/deepseek-v4-flash` |
 
 The maintainer's current values are documented later in
 [Maintainer Setup](#maintainer-setup).
@@ -25,7 +26,9 @@ to change if you adapt the repo for another machine.
 
 ## Mental Model
 
-Each practice window has three panes:
+The default workspace has two tmux windows.
+
+Window 1 is the problem workspace. It has three panes:
 
 ```text
 +-------------+---------------------------+
@@ -38,6 +41,15 @@ Each practice window has three panes:
 +-------------+---------------------------+
 ```
 
+Window 2 is named:
+
+```text
+opencode
+```
+
+It has one pane, starts in `<repo-dir>`, and runs the repo OpenCode
+tutor launcher.
+
 The left pane is for choosing problems. The top-right pane is for
 editing code. The bottom-right pane is for commands and output.
 
@@ -47,8 +59,11 @@ The workflow glue is:
 - When the TUI creates a fresh primary `.py` file, `lc-watch` opens it
   in Neovim.
 - `lc-watch` writes the current file path to `<workdir>/.current/path`.
+- the LeetCode CLI writes the current problem context to
+  `<workdir>/.current/problem.md` and `<workdir>/.current/problem.json`.
 - `<tmux-prefix> T` and `<tmux-prefix> S` run test/submit against that
   exact current file.
+- the OpenCode tutor reads `<workdir>/.current/` when you ask for help.
 
 That last point matters. The workflow targets the current file path, not
 just the problem number. That prevents old numbered attempts from being
@@ -189,9 +204,11 @@ script first.
 1. ensures the `<session-name>` tmux session exists
 2. creates the standard 3-pane layout if needed
 3. repairs a stale or half-restored first window when it can
-4. starts the file watcher in the bottom-right pane if missing
-5. attaches from a normal terminal
-6. switches clients if you are already inside another tmux session
+4. ensures the second window is named `opencode`
+5. starts the file watcher in the bottom-right pane if missing
+6. starts OpenCode in the repo root if the `opencode` window is idle
+7. attaches from a normal terminal
+8. switches clients if you are already inside another tmux session
 
 Manual attach is possible if the session already exists:
 
@@ -220,6 +237,8 @@ Use your own tmux prefix in place of `<tmux-prefix>`.
 | `<tmux-prefix> n` | next window |
 | `<tmux-prefix> p` | previous window |
 | `<tmux-prefix> w` | list windows |
+| `<tmux-prefix> 1` | go to the first problem window |
+| `<tmux-prefix> 2` | go to the OpenCode tutor window |
 | `<tmux-prefix> d` | detach |
 | `<tmux-prefix> [` | enter tmux copy-mode |
 | `q` or `Esc` | leave tmux copy-mode |
@@ -246,7 +265,142 @@ If you install `tmux-resurrect`, its default manual save binding is:
 6. Press `<tmux-prefix> T`.
 7. Read test output in the bottom-right pane.
 8. If tests pass, press `<tmux-prefix> S`.
-9. Detach with `<tmux-prefix> d` when done.
+9. Use the `opencode` window when you want help with the current
+   problem.
+10. Detach with `<tmux-prefix> d` when done.
+
+## OpenCode Tutor Window
+
+The `opencode` window is for asking about the current LeetCode problem
+without copying the statement by hand.
+
+The repo provides:
+
+```text
+AGENTS.md
+.skills/leetcode-dsa-teach/SKILL.md
+.opencode/dsa-prompt.md
+.opencode/config.env
+scripts/lc-opencode-pane
+```
+
+`AGENTS.md` tells OpenCode to read the latest files under:
+
+```text
+<workdir>/.current/
+```
+
+The important files are:
+
+```text
+problem.md      current problem in terminal-friendly Markdown
+problem.json    current problem as structured data
+problem-id      current viewed problem id
+problem-slug    current viewed problem slug
+topic-name      first topic tag name
+topic-slug      first topic tag slug
+id              active picked solution id
+path            active picked solution path
+```
+
+Viewing a problem in the LeetCode CLI updates the problem and topic
+files. Picking a solution updates `id` and `path`.
+
+### Asking For Help
+
+In the `opencode` window, ask normally:
+
+```text
+explain the current problem
+give me hints
+debug my current code
+teach me the pattern for this problem
+what edge cases should I test?
+```
+
+OpenCode is instructed to reread `<workdir>/.current/problem.md` and the
+current solution path when those requests need problem or code context.
+
+### Session Titles
+
+When `scripts/lc-opencode-pane` starts, it reads:
+
+```text
+<workdir>/.current/topic-slug
+```
+
+and uses that as the OpenCode session title. Examples:
+
+```text
+linked-list
+array
+dynamic-programming
+```
+
+If a session with the same title and repo directory already exists,
+OpenCode reuses it. If not, the launcher creates one.
+
+The title is chosen when OpenCode starts. If you browse to another
+problem while OpenCode is already open, the context files still update,
+but the chat title does not auto-rename. This is intentional: automatic
+restarts would interrupt active conversations. To start or reuse the
+topic chat for the latest problem, exit OpenCode in the `opencode`
+window and run:
+
+```bash
+scripts/lc-opencode-pane
+```
+
+### Models
+
+Default model:
+
+```text
+opencode-go/deepseek-v4-flash
+```
+
+Fallback model for first-session setup:
+
+```text
+opencode/deepseek-v4-flash-free
+```
+
+The defaults live in:
+
+```text
+.opencode/config.env
+```
+
+The launcher scans OpenCode's full session list when looking for an
+existing chat with the same topic title and repo directory. It does not
+delete, cap, or limit your sessions.
+
+Temporary OpenCode seed logs go to a repo-local cache directory at
+`<repo-dir>/.cache/opencode`, and are removed after successful startup.
+The `.cache/` directory is ignored by git.
+
+For a one-off model swap:
+
+```bash
+LC_OPENCODE_MODEL=<provider/model> make tmux
+```
+
+or from inside the `opencode` window:
+
+```bash
+LC_OPENCODE_MODEL=<provider/model> scripts/lc-opencode-pane
+```
+
+### If OpenCode Is Not Installed
+
+The LeetCode workflow still works. The `opencode` window prints that
+`opencode` is missing and drops to a shell. Install the OpenCode CLI for
+your system, then run:
+
+```bash
+cd <repo-dir>
+scripts/lc-opencode-pane
+```
 
 ## Next Day: Continue The Same Solution
 
@@ -378,6 +532,11 @@ That new window gets the same three panes:
 Pick a different problem in the new window by pressing `p` in that
 window's left pane.
 
+There is one shared `opencode` tutor window. It follows the latest
+problem context written to `<workdir>/.current/`. If you are working on
+several problem windows, open or pick the problem you want help with
+before asking OpenCode.
+
 Switch windows with:
 
 ```text
@@ -462,6 +621,7 @@ Generic:
 <repo-dir>                    tracked repo files
 <workdir>                     generated LeetCode solutions
 <workdir>/.current/path       current solution sentinel
+<workdir>/.current/problem.md current problem for OpenCode
 ```
 
 LeetCode workspace config and snapshots usually live under the CLI's
@@ -504,6 +664,8 @@ examples, not public requirements.
 | tmux prefix | `C-a` |
 | dotfiles source | `~/dotfiles` |
 | tmux config source | `~/dotfiles/tmux/.tmux.conf` |
+| OpenCode default model | `opencode-go/deepseek-v4-flash` |
+| OpenCode fallback model | `opencode/deepseek-v4-flash-free` |
 
 Maintainer daily command:
 
@@ -518,6 +680,7 @@ Maintainer key examples:
 C-a T      test current solution
 C-a S      submit current solution
 C-a c      create another practice window
+C-a 2      go to OpenCode tutor window
 C-a d      detach
 C-a C-s    save tmux-resurrect state
 ```
@@ -540,6 +703,7 @@ set -g @plugin 'christoomey/vim-tmux-navigator'
 - Treat numbered files as archived attempts.
 - Save in Neovim before testing.
 - Use `<tmux-prefix> T` for test and `<tmux-prefix> S` for submit.
+- Use the `opencode` window for current-problem teaching and debugging.
 - If using tmux restore plugins, save with `<tmux-prefix> C-s` before
   shutdown.
 - Use `make tmux` after reboot instead of direct `tmux attach`.
@@ -614,6 +778,31 @@ Inside the session:
 
 Then pick a problem in the new left pane.
 
+### OpenCode is talking about the wrong problem
+
+Check the current context:
+
+```bash
+cat <workdir>/.current/problem.md
+```
+
+If it is stale, go to the left LeetCode pane for the problem you want
+and open that problem again. Picking with `p` also refreshes the active
+solution path.
+
+### I want the OpenCode chat title to match the latest topic
+
+Exit OpenCode in the `opencode` window and restart:
+
+```bash
+cd <repo-dir>
+scripts/lc-opencode-pane
+```
+
+The launcher reads the latest `<workdir>/.current/topic-slug`, reuses an
+existing session with that title when available, and creates one only
+when needed.
+
 ### I want to inspect old attempts
 
 List them from your workdir:
@@ -634,7 +823,7 @@ make install   build/link the LeetCode CLI fork
 make config    point CLI workspace at this repo
 make login     log in to LeetCode
 make whoami    check login status
-make tmux      open or resume the practice session
+make tmux      open or resume the practice workspace
 make venv      create/sync Python env
 make ml        install optional ML dependencies
 make clean     clear caches
@@ -646,7 +835,8 @@ make repl      launch ipython
 This workflow is intentionally narrow:
 
 - one named tmux session
-- one standard layout
+- one standard problem layout
+- one repo-root OpenCode tutor window
 - one active solution path
 - no manual pane setup
 - no guessing which numbered file to test

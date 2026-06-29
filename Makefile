@@ -19,7 +19,7 @@ help:
 	@printf '%s\n' '  make config     point CLI workspace at this repo'
 	@printf '%s\n' '  make login      log in to LeetCode with browser cookies'
 	@printf '%s\n' '  make whoami     check LeetCode login status'
-	@printf '%s\n' '  make tmux       open or resume the 3-pane practice session'
+	@printf '%s\n' '  make tmux       open or resume the tmux practice workspace'
 	@printf '%s\n' '  make venv       create/sync Python env'
 	@printf '%s\n' '  make ml         install future ML basics'
 	@printf '%s\n' '  make clean      clear cache dirs'
@@ -49,11 +49,13 @@ login:
 whoami:
 	leetcode whoami
 
-# Open or attach the 3-pane practice tmux session.
-# Layout per window:
+# Open or attach the practice tmux session.
+# Window 1 layout:
 #   pane 1 LEFT          : leetcode TUI
 #   pane 2 TOP-RIGHT     : nvim (edits the picked .py)
 #   pane 3 BOTTOM-RIGHT  : shell (test/submit output, see T/S keybinds)
+# Window 2:
+#   opencode tutor in the repo root
 # Auto-3-pane for every new window in the session is enabled by the
 # after-new-window hook in scripts/lc-ensure-session.
 tmux:

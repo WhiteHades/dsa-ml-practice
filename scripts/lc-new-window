@@ -56,6 +56,38 @@ start_watcher() {
   nohup env TMUX_PANE="$pane_id" "$SCRIPTS/lc-watch" >/dev/null 2>&1 &
 }
 
+first_pane() {
+  local target="$1" pane
+
+  while read -r pane; do
+    [ -n "$pane" ] || continue
+    printf '%s\n' "$pane"
+    return 0
+  done < <(tmux list-panes -t "$target" -F '#{pane_id}' 2>/dev/null)
+
+  return 1
+}
+
+split_pane() {
+  local window="$1" pane="$2" direction="$3" percent="$4"
+  local result
+
+  if result="$(tmux split-window "$direction" -p "$percent" -P -F '#{pane_id}' -t "$pane" -c "$WORKDIR" 2>&1)"; then
+    printf '%s\n' "$result"
+    return 0
+  fi
+
+  prepare_window_size "$window"
+
+  if result="$(tmux split-window "$direction" -p "$percent" -P -F '#{pane_id}' -t "$pane" -c "$WORKDIR" 2>&1)"; then
+    printf '%s\n' "$result"
+    return 0
+  fi
+
+  printf 'lc-new-window: failed to split %s in %s: %s\n' "$pane" "$window" "$result" >&2
+  return 1
+}
+
 # tmux passes the new window id from the after-new-window hook. Guessing with
 # display-message is unsafe for detached new-window calls because it can return
 # the previously active window and split it again.
@@ -120,6 +152,9 @@ client_cols() {
   done < <(tmux list-clients -t "$SESSION" -F '#{client_width} #{client_height}' 2>/dev/null)
 
   [ "$cols" -gt 0 ] || cols="$(terminal_cols)"
+  if [ "$cols" -lt "$MIN_COLS" ]; then
+    cols="$MIN_COLS"
+  fi
   printf '%s\n' "$cols"
 }
 
@@ -137,6 +172,10 @@ client_rows() {
     rows=$((rows - 1))
   else
     rows="$(terminal_rows)"
+  fi
+
+  if [ "$rows" -lt "$MIN_ROWS" ]; then
+    rows="$MIN_ROWS"
   fi
 
   printf '%s\n' "$rows"
@@ -162,6 +201,9 @@ if [ -z "$window_id" ]; then
   window_id="$(tmux display-message -p '#{window_id}')"
 fi
 target="${SESSION}:${window_id}"
+left_pane=""
+top_pane=""
+bottom_pane=""
 
 if ! tmux display-message -p -t "$target" '#{window_id}' >/dev/null 2>&1; then
   exit 0
@@ -174,23 +216,24 @@ fi
 prepare_window_size "$target"
 
 # Pane 1 is the new-window's initial pane. Re-purpose it as the TUI pane.
-start_leetcode "${target}.1"
+left_pane="$(first_pane "$target")"
+start_leetcode "$left_pane"
 
 # Pane 2: top-right nvim.
-tmux split-window -h -p 55 -t "${target}.1" -c "$WORKDIR"
-tmux send-keys -t "${target}.2" "\"$SCRIPTS/lc-nvim\"" C-m
+top_pane="$(split_pane "$target" "$left_pane" -h 55)"
+tmux send-keys -t "$top_pane" "\"$SCRIPTS/lc-nvim\"" C-m
 
 # Pane 3: bottom-right shell running the watcher in the background
 # (which auto-opens newly picked .py files in pane 2 and writes the
 # current id to a sentinel for the C-a T / C-a S keybinds). The watcher
 # must run in the background so the shell is free to run test/submit
 # commands in the same pane.
-tmux split-window -v -p 25 -t "${target}.2" -c "$WORKDIR"
+bottom_pane="$(split_pane "$target" "$top_pane" -v 25)"
 window_width="$(tmux display-message -p -t "$target" '#{window_width}')"
 left_width=$(((window_width * 45 + 50) / 100))
-tmux resize-pane -t "${target}.1" -x "$left_width"
-tmux resize-pane -t "${target}.3" -y 25%
-start_watcher "${target}.3"
+tmux resize-pane -t "$left_pane" -x "$left_width"
+tmux resize-pane -t "$bottom_pane" -y 25%
+start_watcher "$bottom_pane"
 
 # Land the user on the TUI pane so they can browse.
-tmux select-pane -t "${target}.1"
+tmux select-pane -t "$left_pane"

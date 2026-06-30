@@ -59,11 +59,12 @@ whoami:
 # after-new-window hook in scripts/lc-ensure-session.
 tmux:
 	@base_workspace="$$(hyprctl activeworkspace -j 2>/dev/null | node -e 'const fs=require("fs"); try { const input=JSON.parse(fs.readFileSync(0,"utf8")); if (Number.isInteger(input.id)) process.stdout.write(String(input.id)); } catch {}' 2>/dev/null || true)"; \
-	LC_OPENCODE_BASE_WORKSPACE="$$base_workspace" $(SCRIPTS)/lc-ensure-session
-	@if [ -n "$${TMUX:-}" ]; then \
+	env -u TMUX -u TMUX_PANE LC_OPENCODE_BASE_WORKSPACE="$$base_workspace" $(SCRIPTS)/lc-ensure-session
+	@current_client_tty="$$(tmux display-message -p '#{client_tty}' 2>/dev/null || true)"; \
+	if [ -n "$${TMUX:-}" ] && [ -n "$$current_client_tty" ]; then \
 		tmux switch-client -t $(SESSION); \
 	else \
-		tmux attach -t $(SESSION); \
+		env -u TMUX -u TMUX_PANE tmux attach -t $(SESSION); \
 	fi
 
 oc:

@@ -7,14 +7,13 @@
 # What it does:
 #   1. Watches $WORKDIR for new or moved-in .py files.
 #   2. When one appears, sends `:edit <path>` to the nvim pane in the
-#      same window (pane .2 in the standard 3-pane layout) so the
+#      same window so the
 #      picked solution auto-opens.
 #   3. Writes the problem id and path to sentinels under $WORKDIR/.current/
 #      so the test/submit keybinds (C-a T, C-a S) target the active file.
 #
 # This script does NOT need to be invoked manually. The `make tmux` target
-# starts it in pane .3 of the initial window, and `lc-new-window` starts
-# it in pane .3 of every subsequent window.
+# starts it in the bottom-right pane of each workflow window.
 # ------------------------------------------------------------------------------
 set -euo pipefail
 
@@ -32,8 +31,22 @@ if [ -z "$my_pane" ]; then
 fi
 
 window_id="$(tmux display-message -p -t "$my_pane" '#{window_id}')"
-nvim_pane="${window_id}.2"
 LOCK_DIR="$WORKDIR/.current/lc-watch-${window_id}.lock"
+
+nvim_pane() {
+  local pane index=0
+
+  while read -r pane; do
+    [ -n "$pane" ] || continue
+    index=$((index + 1))
+    if [ "$index" -eq 2 ]; then
+      printf '%s\n' "$pane"
+      return 0
+    fi
+  done < <(tmux list-panes -t "$window_id" -F '#{pane_id}' 2>/dev/null)
+
+  return 1
+}
 
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   old_pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
@@ -84,7 +97,9 @@ tmux_target_exists() {
   [ -n "$(tmux display-message -p -t "$1" '#{pane_id}' 2>/dev/null || true)" ]
 }
 
-while tmux_target_exists "$my_pane" && tmux_target_exists "$nvim_pane"; do
+nvim_pane_id="$(nvim_pane || true)"
+
+while tmux_target_exists "$my_pane" && [ -n "$nvim_pane_id" ] && tmux_target_exists "$nvim_pane_id"; do
   events="$(inotifywait -q -r "$WORKDIR" -e create -e moved_to --format '%w%f' -t 2 2>/dev/null || true)"
   [ -n "$events" ] || continue
 
@@ -98,7 +113,7 @@ while tmux_target_exists "$my_pane" && tmux_target_exists "$nvim_pane"; do
           printf '%s\n' "$id" > "$ID_SENTINEL"
         fi
         printf '%s\n' "$path" > "$PATH_SENTINEL"
-        tmux send-keys -t "$nvim_pane" ":edit $(escape_vim_path "$path")" C-m
+        tmux send-keys -t "$nvim_pane_id" ":edit $(escape_vim_path "$path")" C-m
         ;;
     esac
   done <<< "$events"

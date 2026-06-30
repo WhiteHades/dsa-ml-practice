@@ -28,6 +28,7 @@ check_tmux_layout() {
   local width height saw_client=0 match_client=0
   local window_width window_height pane_count=0 pane
   local target="" window_id window_name window_role window_size_option
+  local managed_count=0
 
   command -v tmux >/dev/null 2>&1 || return 0
   tmux has-session -t "$session" 2>/dev/null || return 0
@@ -35,10 +36,13 @@ check_tmux_layout() {
 
   while read -r window_id window_name window_role; do
     if [ "$window_role" = "$problem_role" ]; then
+      managed_count=$((managed_count + 1))
+      [ -n "$target" ] && continue
       target="$session:$window_id"
-      break
     fi
   done < <(tmux list-windows -t "$session" -F '#{window_id} #{window_name} #{@dsa-role}' 2>/dev/null)
+
+  [ "$managed_count" -le 1 ] || return 1
 
   if [ -z "$target" ]; then
     target="$session:1"
